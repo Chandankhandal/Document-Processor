@@ -13,6 +13,8 @@ app = FastAPI()
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://document-processor-cgu2.onrender.com",
+    "https://*.onrender.com",
 ]
 
 app.add_middleware(
