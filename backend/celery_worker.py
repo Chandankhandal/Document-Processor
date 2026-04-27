@@ -5,8 +5,12 @@ import time
 import os
 from database import SessionLocal, Document 
 
-# Uses Render's REDIS_URL if it exists, otherwise defaults to local
-redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+# --- SAFETY-PROOF REDIS URL ---
+raw_redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+if raw_redis_url and not raw_redis_url.startswith(("redis://", "rediss://", "valkey://")):
+    redis_url = f"redis://{raw_redis_url}"
+else:
+    redis_url = raw_redis_url
 
 # Setup for Pub/Sub progress tracking
 redis_client = redis.from_url(redis_url, decode_responses=True)
