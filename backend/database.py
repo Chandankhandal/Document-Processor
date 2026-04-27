@@ -3,11 +3,8 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
 
-# --- CHANGE THIS PART ---
-# It tries to find the 'DATABASE_URL' environment variable first.
-# If it's not found (like when you are working locally), it uses your Docker URL.
+# Uses Render's DATABASE_URL if it exists, otherwise defaults to local Docker
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://admin:password123@localhost:5432/document_vault")
-# ------------------------
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

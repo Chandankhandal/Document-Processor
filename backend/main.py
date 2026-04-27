@@ -10,9 +10,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
+# Allow your local development and your future Render frontend URL
 origins = [
     "http://localhost:3000",
-    "https://your-frontend-name.onrender.com",
+    "http://127.0.0.1:3000",
 ]
 
 app.add_middleware(
@@ -23,16 +24,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Create DB tables when the server starts
 init_db()
 
-# Dependency to get DB session
 def get_db():
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
+
+# Redis setup using environment variables
+redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+r = redis.from_url(redis_url, decode_responses=True)
 
 @app.get("/")
 def read_root():
@@ -49,56 +52,38 @@ async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db
 
 @app.get("/status/{doc_id}")
 def get_status(doc_id: int, db: Session = Depends(get_db)):
-        doc = db.query(Document).filter(Document.id == doc_id).first()
-        if not doc:
-            return {"error": "Document not found"}
+    doc = db.query(Document).filter(Document.id == doc_id).first()
+    if not doc:
+        return {"error": "Document not found"}
+    return {
+        "id": doc.id,
+        "filename": doc.filename,
+        "status": doc.status,
+        "result": doc.result
+    }
 
-        return{
-                "id": doc.id,
-                "filename": doc.filename,
-                "status": doc.status,
-                "result": doc.result
-            }
-
-redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
-r = redis.from_url(redis_url, decode_responses=True)
+@app.get("/stream-progress/{doc_id}") 
 def get_live_progress(doc_id: int):
     data = r.get(f"job_progress_{doc_id}")    
     if data:
         return json.loads(data) 
-    return {"message": "No progress reported yet. Wait for the Chef to start!"}  
+    return {"message": "No progress reported yet."}  
 
 @app.put("/update-result/{doc_id}")
 def update_result(doc_id: int, new_data: dict = Body(...), db: Session = Depends(get_db)):
     doc = db.query(Document).filter(Document.id == doc_id).first()  
     if not doc:
         return {"error": "Document not found"}
-
-    #To update the Json results with the user's edits
     doc.result = new_data
     db.commit()    
-    return {"message": "Result updated sucessfully", "data": doc.result}
+    return {"message": "Result updated successfully", "data": doc.result}
     
 @app.get("/export/{doc_id}")
 def export_data(doc_id: int, db: Session = Depends(get_db)):
     doc = db.query(Document).filter(Document.id == doc_id).first()
     if not doc or doc.status != "Completed":
         return {"error": "Document not ready for export"}
-    
     return JSONResponse(
         content=doc.result,
         headers={"Content-Disposition": f"attachment; filename=result_{doc_id}.json"}
     )
-
-@app.post("/retry/{doc_id}")
-async def retry_job(doc_id: int, db: Session = Depends(SessionLocal)):
-    doc = db.query(Document).filter(Documen.id == doc_id).first()
-    if not doc:
-        return {"error": "Not found"}
-
-        #Reset status and trigger worker again
-        doc.status = "Queued"
-        db.commit()
-
-        process_document_task.delay(doc.id, doc.filename)
-        return {"message": "Retry started", "id": doc.id, "status": "Queued"}
