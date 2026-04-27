@@ -1,5 +1,6 @@
 import json
 import redis
+import os
 from fastapi import Body, FastAPI, UploadFile, File, Depends
 from sqlalchemy.orm import Session
 from database import init_db, SessionLocal, Document
@@ -11,7 +12,7 @@ app = FastAPI()
 
 origins = [
     "http://localhost:3000",
-    "http://127.0.0.1:3000",
+    "https://your-frontend-name.onrender.com",
 ]
 
 app.add_middleware(
@@ -59,8 +60,8 @@ def get_status(doc_id: int, db: Session = Depends(get_db)):
                 "result": doc.result
             }
 
-r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)    
-@app.get("/stream-progress/{doc_id}") 
+redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+r = redis.from_url(redis_url, decode_responses=True)
 def get_live_progress(doc_id: int):
     data = r.get(f"job_progress_{doc_id}")    
     if data:
